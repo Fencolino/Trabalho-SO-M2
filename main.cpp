@@ -8,7 +8,7 @@
 #include <iomanip>   // Para formatar saída
 #include <cmath>     // Para arredondar
 #include <algorithm> // Para ordenar
-#include <numeric>   // Para std::accumulate (agora substituído por loop)
+#include <numeric>   // Para std::accumulate 
 
 using namespace std;
 
@@ -16,7 +16,13 @@ using namespace std;
 // Estruturas de Dados e Enumerações (Sem alterações)
 //---------------------------------------------------------------------------
 
-enum class EstagioTarefa { ESPERA_INICIAL, PRONTA, EXECUTANDO_ETAPA1, BLOQUEADA_IO, EXECUTANDO_ETAPA2, FINALIZADA };
+enum class EstagioTarefa { ESPERA_INICIAL,
+                            PRONTA_ETAPA1,
+                            PRONTA_ETAPA2,
+                        EXECUTANDO_ETAPA1,
+                             BLOQUEADA_IO,
+                        EXECUTANDO_ETAPA2,
+                               FINALIZADA };
 
 struct InfoTarefa {
     int id_unico;
@@ -219,10 +225,10 @@ void obterConfiguracaoUsuario() {
 
 void processarChegadas() {
     while(g_estado.proximo_indice_chegada < g_estado.tarefas_configuradas.size() &&
-          g_estado.tarefas_configuradas[g_estado.proximo_indice_chegada].instante_chegada <= g_estado.tempo_atual)
+          g_estado.tarefas_configuradas[g_estado.proximo_indice_chegada].instante_chegada <= g_estado.tempo_atual) 
     {
         InfoTarefa* nova_tarefa_pronta = &g_estado.tarefas_configuradas[g_estado.proximo_indice_chegada];
-        nova_tarefa_pronta->estagio_corrente = EstagioTarefa::PRONTA;
+        nova_tarefa_pronta->estagio_corrente = EstagioTarefa::PRONTA_ETAPA1;  // Estado específico para 1a rajada
         nova_tarefa_pronta->quantum_designado = calcularQuantumTarefa(nova_tarefa_pronta);
         nova_tarefa_pronta->quantum_restante_ciclo = nova_tarefa_pronta->quantum_designado;
         nova_tarefa_pronta->ultimo_instante_fila_prontos = g_estado.tempo_atual;
@@ -237,8 +243,9 @@ void processarBloqueiosIO() {
         InfoTarefa* t = g_estado.fila_bloqueadas_io.front();
         g_estado.fila_bloqueadas_io.pop();
         t->tempo_restante_bloqueio--;
+        
         if (t->tempo_restante_bloqueio <= 0) {
-            t->estagio_corrente = EstagioTarefa::PRONTA;
+            t->estagio_corrente = EstagioTarefa::PRONTA_ETAPA2;  // Estado específico para 2a rajada
             t->tempo_restante_etapa_atual = t->tempo_cpu_etapa2;
             t->quantum_designado = calcularQuantumTarefa(t);
             t->quantum_restante_ciclo = t->quantum_designado;
@@ -250,7 +257,6 @@ void processarBloqueiosIO() {
     }
 }
 
-// MODIFICADA: Usa while para iterar sobre a fila
 void atualizarTempoEsperaFila() {
     int n = g_estado.fila_prontas.size();
     int contador = 0;
@@ -277,9 +283,13 @@ void executarTarefaEmNucleo(ResultadosSimulacao& resultados, int id_nucleo, int&
             tarefa_atual->instante_primeira_execucao = g_estado.tempo_atual;
         }
 
-        tarefa_atual->estagio_corrente = (tarefa_atual->tempo_restante_etapa_atual == tarefa_atual->tempo_cpu_etapa1)
-                                         ? EstagioTarefa::EXECUTANDO_ETAPA1
-                                         : EstagioTarefa::EXECUTANDO_ETAPA2;
+        // Define o estado de execução correto baseado no estado pronto
+        if (tarefa_atual->estagio_corrente == EstagioTarefa::PRONTA_ETAPA1) {
+            tarefa_atual->estagio_corrente = EstagioTarefa::EXECUTANDO_ETAPA1;
+        } else if (tarefa_atual->estagio_corrente == EstagioTarefa::PRONTA_ETAPA2) {
+            tarefa_atual->estagio_corrente = EstagioTarefa::EXECUTANDO_ETAPA2;
+        }
+        
         inicio_burst_cpu[id_nucleo] = g_estado.tempo_atual;
     }
 
@@ -308,7 +318,7 @@ void executarTarefaEmNucleo(ResultadosSimulacao& resultados, int id_nucleo, int&
                     tarefas_restantes--;
                 }
             } else { // Quantum expirou
-                tarefa_atual->estagio_corrente = EstagioTarefa::PRONTA;
+               tarefa_atual->estagio_corrente = (tarefa_atual->estagio_corrente == EstagioTarefa::EXECUTANDO_ETAPA1) ? EstagioTarefa::PRONTA_ETAPA1 : EstagioTarefa::PRONTA_ETAPA2;
                 tarefa_atual->quantum_designado = calcularQuantumTarefa(tarefa_atual);
                 tarefa_atual->quantum_restante_ciclo = tarefa_atual->quantum_designado;
                 tarefa_atual->ultimo_instante_fila_prontos = g_estado.tempo_atual + 1;
@@ -337,24 +347,22 @@ void rodarSimulacao(ResultadosSimulacao& resultados) {
         g_estado.tempo_atual++;
 
         if (tarefas_pendentes <= 0) {
-            bool nucleo_ocupado = false;
-            for(int k=0; k < g_config.num_cpus; ++k) {
+            bool nucleos_ocupados = false;
+            for(int k = 0; k < g_config.num_cpus; ++k) {
                 if (g_estado.tarefa_em_execucao[k] != nullptr) {
-                    nucleo_ocupado = true;
+                    nucleos_ocupados = true;
                     if(inicio_burst_cpu[k] != -1) {
-                         registrarLogGantt(resultados, k, inicio_burst_cpu[k], g_estado.tempo_atual, g_estado.tarefa_em_execucao[k]->id_unico);
+                        registrarLogGantt(resultados, k, inicio_burst_cpu[k], 
+                                        g_estado.tempo_atual, 
+                                        g_estado.tarefa_em_execucao[k]->id_unico);
                     }
                 }
             }
-            if (!nucleo_ocupado && g_estado.fila_prontas.empty() && g_estado.fila_bloqueadas_io.empty()) {
-                 bool alguma_tarefa_nao_chegou = false;
-                 for(const auto& t : g_estado.tarefas_configuradas) {
-                     if(t.estagio_corrente == EstagioTarefa::ESPERA_INICIAL) {
-                         alguma_tarefa_nao_chegou = true;
-                         break;
-                     }
-                 }
-                 if (!alguma_tarefa_nao_chegou) break;
+            
+            if (!nucleos_ocupados && g_estado.fila_prontas.empty() && 
+                g_estado.fila_bloqueadas_io.empty() && 
+                g_estado.proximo_indice_chegada == g_estado.tarefas_configuradas.size()) {
+                break;
             }
         }
     }
@@ -517,4 +525,5 @@ int main() {
     apresentarResultadosCompletos(resultados);
     return 0;
 }
+
 
