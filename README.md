@@ -1,13 +1,17 @@
-# Simulador de Escalonamento Round Robin com Múltiplos Núcleos
+# Simulador de Escalonamento Round Robin
 
-Este projeto é um simulador do algoritmo de escalonamento **Round Robin**, desenvolvido como parte do Trabalho M2 da disciplina de **Sistemas Operacionais**. O simulador suporta múltiplos núcleos de CPU, bloqueios de E/S e inserção dinâmica de processos durante a execução.
+Este projeto é um simulador do algoritmo de escalonamento **Round Robin**, desenvolvido em **C++** como parte do Trabalho M2 da disciplina de **Sistemas Operacionais**.
 
-## 🧠 Funcionalidades
+O simulador permite:
 
-- ✅ Suporte a múltiplos núcleos
-- ⏱️ Quantum configurável
-- 🔁 Simulação do comportamento Round Robin
-- 📥 Inserção dinâmica de processos
-- 💤 Gerenciamento de bloqueios de E/S
-- 📊 Visualização da execução por núcleo
+- Executar múltiplos processos em paralelo com mais de um núcleo.
+- Definir o quantum para o escalonamento.
+- Inserir novos processos dinamicamente durante a execução.
+- Simular bloqueios de E/S.
 
+O objetivo do trabalho é compreender na prática o funcionamento do escalonador Round Robin, considerando cenários realistas com múltiplos núcleos e interrupções.
+
+## Autores
+
+- David Smith Souza
+- Lucas Rodrigues Pinheiro
